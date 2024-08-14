@@ -26,6 +26,7 @@ import {stringIsEmpty} from '@/utils/string-is-empty';
 import {actionTwo} from '@/utils/show-driver';
 import delay from '@/utils/delay';
 import {getJsonRpcConfig} from '@/utils/get-jsonrpc-config';
+import { sendToMotrix } from '@/utils/motrix';
 
 const route = useRoute();
 const router = useRouter();
@@ -47,7 +48,7 @@ const userRef = storeToRefs(userStore);
 const rpcRef = userRef.rpc;
 const exportFormat = userRef.exportFormat;
 const downloadType = ref<{
-	code: 'web' | 'jsonrpc' | 'idm' |''
+	code: 'web' | 'motrix' | 'jsonrpc' | 'idm' |''
 }>({
 	code: ''
 });
@@ -185,6 +186,10 @@ const stop = () => {
 const onWorkerMessage = async (m: WorkerResponse) => {
 	if (m.type === 'done') {
 		stop();
+		if (results.length === 0) {
+			message.warn('全部任务失败，请重新获取！');
+			return;
+		}
 		message.success('全部任务已完成！');
 		if (downloadType.value.code === 'web') {
 			await packageDownloadLinks(results, userRef.exportFormat.value);
@@ -192,6 +197,10 @@ const onWorkerMessage = async (m: WorkerResponse) => {
 			return;
 		} else if (downloadType.value.code === 'idm') {
 			await package2IDMLinks(results);
+			stop();
+			return;
+		}else if (downloadType.value.code === 'motrix') {
+			sendToMotrix(results);
 			stop();
 			return;
 		}
@@ -307,7 +316,11 @@ worker.setCallback(onWorkerMessage);
 							<div class="field col">
 								<label for="type">下载方式</label>
 								<Dropdown v-model="downloadType" :disabled="blocked"
-								          :options="[{name: 'Web', code: 'web'}, {name: 'JSON RPC', code: 'jsonrpc'},{name: 'IDM 下载', code: 'idm'}]"
+								          :options="[{name: 'Web', code: 'web'},
+								          {name: '推送到 Motrix', code: 'motrix'},
+								          {name: 'JSON RPC', code: 'jsonrpc'},
+								          {name: 'IDM 下载', code: 'idm'},
+								          ]"
 								          optionLabel="name" placeholder="选择下载方式"/>
 							</div>
 						</div>
@@ -321,6 +334,16 @@ worker.setCallback(onWorkerMessage);
 									<InputText type="text" placeholder="{filename}-{url}" v-model="exportFormat"/>
 								</div>
 							</div>
+						</template>
+						<template v-if="downloadType.code === 'motrix'">
+							<Divider align="left" type="solid">
+								<b>推送到 Motrix</b>
+							</Divider>
+							<Divider></Divider>
+							<p>此功能用于自动推送并跳转到<strong>Motrix</strong>中。<br>
+								请务必<strong>先安装Motrix</strong>再使用。<br>
+								会提示是否要跳转到Motrix，点击<strong>是</strong>即可，会自动帮你设置UA，无需再更改。<br>
+							</p>
 						</template>
 						<template v-if="downloadType.code === 'jsonrpc'">
 							<Divider align="left" type="solid">
